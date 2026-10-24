@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Inventory Setups viewer</title>
+<style>
+:root{--bg:#fff;--fg:#1b1b1b;--mut:#666;--card:#f4f1ea;--line:#d8d2c4;--slot:#ddd6c6;--acc:#7a5c1e;--err:#a02020}
+@media (prefers-color-scheme:dark){:root{--bg:#15130f;--fg:#ece6d8;--mut:#9a927f;--card:#211e17;--line:#3a3529;--slot:#2e2a20;--acc:#d9b45a;--err:#ff8a7a}}
+*{box-sizing:border-box}
+body{margin:auto;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,sans-serif;padding:12px;max-width:760px}
+h1{font-size:1.2rem;margin:.2rem 0 .6rem}
+.hidden{display:none!important}
+#drop{border:2px dashed var(--line);border-radius:10px;padding:16px;background:var(--card)}
+#drop.over{border-color:var(--acc)}
+textarea{width:100%;min-height:110px;padding:10px;font:13px monospace;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+button,label.btn{padding:10px 14px;font-size:.95rem;border:1px solid var(--acc);background:transparent;color:var(--acc);border-radius:6px;min-height:44px;cursor:pointer;display:inline-flex;align-items:center}
+#msg{margin:8px 0;font-size:.9rem;color:var(--mut)}
+#msg.err{color:var(--err)}
+#q{width:100%;padding:12px;font-size:1rem;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg)}
+#count{color:var(--mut);font-size:.85rem;margin:.4rem 0}
+details{border:1px solid var(--line);border-radius:8px;margin:6px 0;background:var(--card)}
+summary{padding:12px;cursor:pointer;min-height:44px;font-weight:600}
+.body{padding:0 12px 12px}
+.row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+.grid{display:grid;gap:3px;background:var(--line);padding:3px;border-radius:6px}
+.inv{grid-template-columns:repeat(4,44px)}
+.eq{grid-template-columns:repeat(3,44px)}
+.strip{display:flex;gap:3px;flex-wrap:wrap}
+.slot{position:relative;width:44px;height:40px;background:var(--slot);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--mut);overflow:hidden;border-radius:3px}
+.slot.spacer{background:transparent}
+.slot img{max-width:100%;max-height:100%}
+.qty{position:absolute;left:2px;top:0;font:bold 11px/1 monospace;text-shadow:1px 1px #000}
+h3{font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:var(--acc);margin:12px 0 4px}
+pre{margin:6px 0;padding:10px;background:var(--bg);border:1px solid var(--line);border-radius:6px;white-space:pre-wrap;word-break:break-all;font-size:.8rem;user-select:all}
+.notes{white-space:pre-wrap;font-size:.9rem;color:var(--mut)}
+.warn{font-size:.85rem;color:var(--mut)}
+footer{margin:24px 0 8px;color:var(--mut);font-size:.75rem}
+</style></head><body>
+<h1>Inventory Setups viewer</h1>
+
+<div id="loader">
+  <div id="drop">
+    <p style="margin-top:0">Drop your exported <code>.json</code> here, or paste it below. Nothing is uploaded; it all stays in your browser.</p>
+    <textarea id="paste" placeholder="Paste exported Inventory Setups JSON" spellcheck="false"></textarea>
+    <div class="bar">
+      <button id="load">Load pasted JSON</button>
+      <label class="btn">Choose file<input id="file" type="file" accept=".json,application/json" multiple hidden></label>
+    </div>
+  </div>
+</div>
+<div id="msg"></div>
+
+<div id="app" class="hidden">
+  <input id="q" type="search" placeholder="Search setups (Enter opens the first match)" autocomplete="off">
+  <div id="count"></div>
+  <div class="bar">
+    <button id="again">Load different data</button>
+    <button id="md">Download bank tags (.md)</button>
+  </div>
+  <div id="list"></div>
+</div>
+
+<footer>Item icons &copy; Jagex, rendered from the OSRS game cache. <span id="ver"></span></footer>
+
+<script>
+const COLS = 8, MAX_SLOTS = 80; // official bank tag tab grid is 8x10
+const EQ_ROWS = [[null,0,null],[1,2,13],[3,4,5],[null,7,null],[9,10,12]];
+const $ = id => document.getElementById(id);
+
+/* ---------- parsing ---------- */
+function importString(layout){
+  if (!Array.isArray(layout)) return {s: null, warn: 'This export has no layout, so there is no bank tag string.'};
+  const parts = [];
+  for (let slot = 0; slot < layout.length; slot++) {
+    const id = layout[slot];
+    if (id === -1 || id == null) continue;
+    if (slot >= MAX_SLOTS) return {s: null, warn: 'Items sit beyond the 8x10 tab grid, so no bank tag string was made.'};
+    parts.push(id, slot % COLS, Math.floor(slot / COLS));
+  }
+  return {s: '1,' + (parts.length / 3) + ',' + parts.join(','), warn: null};
+}
+const clean = list => (Array.isArray(list) ? list : []).map(it => (it && typeof it.id === 'number' && it.id !== -1)
+  ? {id: it.id, q: Number(it.q) || 0} : null);
+
+function normalize(json){
+  const entries = Array.isArray(json) ? json : [json];
+  const out = [];
+  entries.forEach((e, i) => {
+    if (!e || typeof e !== 'object') return;
+    const s = e.setup && typeof e.setup === 'object' ? e.setup : (e.inv || e.eq ? e : null);
+    if (!s) return;
+    const imp = importString(e.setup ? e.layout : null);
+    const afi = s.afi && typeof s.afi === 'object' ? Object.values(s.afi) : [];
+    out.push({
+      n: String(s.name || 'Setup ' + (i + 1)),
+      s: imp.s, warn: imp.warn,
+      inv: clean(s.inv), eq: clean(s.eq), rp: clean(s.rp), qv: clean(s.qv), afi: clean(afi),
+      notes: typeof s.notes === 'string' ? s.notes : ''
+    });
+  });
+  out.sort((a, b) => (a.n.toLowerCase() < b.n.toLowerCase() ? -1 : a.n.toLowerCase() > b.n.toLowerCase() ? 1 : 0));
+  return out;
+}
+
+/* ---------- rendering (user data only ever goes through textContent) ---------- */
+function el(tag, cls, text){
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+function fmt(q){
+  if (q >= 1e7) return [Math.floor(q / 1e6) + 'M', '#00ff80'];
+  if (q >= 1e5) return [Math.floor(q / 1e3) + 'K', '#ffffff'];
+  return [String(q), '#ffff00'];
+}
+// The self-contained release build defines window.ICONS (id -> base64 PNG); otherwise icons/<id>.png is used.
+function iconSrc(id){
+  if (!window.ICONS) return 'icons/' + id + '.png';
+  return window.ICONS[id] ? 'data:image/png;base64,' + window.ICONS[id] : null;
+}
+function slot(it){
+  const d = el('div', 'slot');
+  if (!it) return d;
+  d.title = 'Item ' + it.id + (it.q > 1 ? ' x' + it.q.toLocaleString() : '');
+  const fallback = () => { d.classList.add('missing'); d.append(String(it.id)); };
+  const src = iconSrc(it.id);
+  if (!src) fallback();
+  else {
+    const img = new Image();
+    img.alt = ''; img.loading = 'lazy'; img.src = src;
+    img.onerror = () => { img.remove(); fallback(); };
+    d.append(img);
+  }
+  if (it.q > 1) {
+    const [t, color] = fmt(it.q);
+    const s = el('span', 'qty', t); s.style.color = color; d.append(s);
+  }
+  return d;
+}
+function strip(items){
+  const s = el('div', 'strip');
+  items.filter(Boolean).forEach(it => s.append(slot(it)));
+  return s;
+}
+async function copyText(text, btn){
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) {
+    const t = el('textarea'); t.value = text; document.body.append(t); t.select();
+    try { document.execCommand('copy'); } catch (_) {}
+    t.remove();
+  }
+  btn.textContent = 'Copied';
+  setTimeout(() => btn.textContent = 'Copy tag', 1200);
+}
+function render(body, s){
+  const row = el('div', 'row');
+  const inv = el('div'); inv.append(el('h3', null, 'Inventory'));
+  const ig = el('div', 'grid inv');
+  for (let i = 0; i < 28; i++) ig.append(slot(s.inv[i]));
+  inv.append(ig);
+  const eq = el('div'); eq.append(el('h3', null, 'Equipment'));
+  const eg = el('div', 'grid eq');
+  EQ_ROWS.forEach(r => r.forEach(idx => eg.append(idx === null ? el('div', 'slot spacer') : slot(s.eq[idx]))));
+  eq.append(eg);
+  row.append(inv, eq);
+  body.append(row);
+  [['Rune pouch', s.rp], ['Quiver', s.qv], ['Additional items', s.afi]].forEach(([label, items]) => {
+    if (items.some(Boolean)) { body.append(el('h3', null, label)); body.append(strip(items)); }
+  });
+  if (s.notes) { body.append(el('h3', null, 'Notes')); body.append(el('div', 'notes', s.notes)); }
+  if (s.s) {
+    body.append(el('h3', null, 'Bank tag import string'));
+    body.append(el('pre', null, s.s));
+    const b = el('button', null, 'Copy tag');
+    b.onclick = () => copyText(s.s, b);
+    body.append(b);
+  } else if (s.warn) body.append(el('p', 'warn', s.warn));
+}
+
+/* ---------- app state ---------- */
+let records = [], nodes = [];
+function show(recs){
+  records = recs;
+  const list = $('list');
+  list.replaceChildren();
+  nodes = recs.map(s => {
+    const d = el('details');
+    d.append(el('summary', null, s.n));
+    const body = el('div', 'body');
+    d.append(body);
+    let done = false;
+    d.addEventListener('toggle', () => { if (d.open && !done) { done = true; render(body, s); } });
+    list.append(d);
+    return {d, key: s.n.toLowerCase()};
+  });
+  $('q').value = '';
+  filter();
+  $('loader').classList.add('hidden');
+  $('app').classList.remove('hidden');
+}
+function filter(){
+  const term = $('q').value.trim().toLowerCase();
+  let shown = 0;
+  nodes.forEach(n => { const hit = !term || n.key.includes(term); n.d.hidden = !hit; if (hit) shown++; });
+  $('count').textContent = shown + ' of ' + nodes.length + ' setups';
+}
+function msg(text, isErr){ const m = $('msg'); m.textContent = text || ''; m.className = isErr ? 'err' : ''; }
+
+function loadTexts(texts){
+  const all = [];
+  for (const t of texts) {
+    let json;
+    try { json = JSON.parse(t); }
+    catch (e) { return msg('That is not valid JSON: ' + e.message, true); }
+    all.push(...normalize(json));
+  }
+  if (!all.length) return msg('No setups found. Expecting the JSON exported from the Inventory Setups plugin.', true);
+  all.sort((a, b) => (a.n.toLowerCase() < b.n.toLowerCase() ? -1 : a.n.toLowerCase() > b.n.toLowerCase() ? 1 : 0));
+  msg('');
+  show(all);
+}
+async function loadFiles(files){
+  const list = [...files];
+  if (!list.length) return;
+  try { loadTexts(await Promise.all(list.map(f => f.text()))); }
+  catch (e) { msg('Could not read the file: ' + e.message, true); }
+}
+
+$('load').onclick = () => loadTexts([$('paste').value]);
+$('paste').addEventListener('paste', () => setTimeout(() => { if ($('paste').value.trim()) loadTexts([$('paste').value]); }, 0));
+$('file').addEventListener('change', e => loadFiles(e.target.files));
+$('q').addEventListener('input', filter);
+$('q').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const first = nodes.find(n => !n.d.hidden);
+  if (first) { first.d.open = true; first.d.scrollIntoView({block: 'nearest'}); }
+});
+$('again').onclick = () => { $('app').classList.add('hidden'); $('loader').classList.remove('hidden'); msg(''); };
+$('md').onclick = () => {
+  const text = records.filter(r => r.s).map(r => '## ' + r.n + '\n\n```\n' + r.s + '\n```\n\n').join('');
+  const a = el('a'); a.href = URL.createObjectURL(new Blob([text], {type: 'text/markdown'}));
+  a.download = 'bank-tags.md'; document.body.append(a); a.click(); a.remove();
+};
+['dragenter', 'dragover'].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); $('drop').classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); $('drop').classList.remove('over'); }));
+document.addEventListener('drop', e => { if (e.dataTransfer) loadFiles(e.dataTransfer.files); });
+
+// The icon pipeline writes icons/version.json; show it when present (silently skipped otherwise).
+const showVer = v => { if (v && v.cache) $('ver').textContent = 'Icons from OSRS cache ' + v.cache + '.'; };
+if (window.ICON_VERSION) showVer(window.ICON_VERSION);
+else if (typeof fetch === 'function') fetch('icons/version.json').then(r => r.ok ? r.json() : null).then(showVer).catch(() => {});
+</script></body></html>
