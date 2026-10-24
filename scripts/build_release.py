@@ -1,14 +1,28 @@
 #!/usr/bin/env python3
-"""Build the self-contained viewer: index.html with every icon embedded as base64.
+"""Build the self-contained viewer: one HTML file with CSS, JS, the example, every icon
+(base64) and the item-name map all embedded.
 
-  python3 scripts/build_release.py index.html icons setups-viewer.html
+  python3 scripts/build_release.py . icons setups-viewer.html
+
+Arguments: <viewer dir with index.html, style.css, app.js, example.js> <icons dir> <output file>
 """
 import base64
 import json
 import os
 import sys
 
-src, icon_dir, out = sys.argv[1:4]
+viewer, icon_dir, out = sys.argv[1:4]
+
+
+def read(path):
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
+def inline(html, tag, replacement):
+    assert html.count(tag) == 1, f"expected exactly one {tag!r} in index.html"
+    return html.replace(tag, replacement, 1)
+
 
 icons = {}
 for name in os.listdir(icon_dir):
@@ -17,19 +31,29 @@ for name in os.listdir(icon_dir):
         with open(os.path.join(icon_dir, name), "rb") as f:
             icons[stem] = base64.b64encode(f.read()).decode()
 
-version = {}
-vpath = os.path.join(icon_dir, "version.json")
-if os.path.exists(vpath):
-    with open(vpath, encoding="utf-8") as f:
-        version = json.load(f)
 
-with open(src, encoding="utf-8") as f:
-    html = f.read()
-assert html.count("<script>") == 1, "expected exactly one inline script in the viewer"
-data = json.dumps(icons, separators=(",", ":")).replace("</", "<\\/")
-inject = f"<script>window.ICONS={data};window.ICON_VERSION={json.dumps(version)};</script>\n"
-html = html.replace("<script>", inject + "<script>", 1)
+def optional_json(name):
+    path = os.path.join(icon_dir, name)
+    return json.load(open(path, encoding="utf-8")) if os.path.exists(path) else {}
+
+
+names, version = optional_json("names.json"), optional_json("version.json")
+
+
+def js(obj):  # safe inside <script>
+    return json.dumps(obj, separators=(",", ":")).replace("</", "<\\/")
+
+
+css, app, example = (read(os.path.join(viewer, f)) for f in ("style.css", "app.js", "example.js"))
+for label, text in (("style.css", css), ("app.js", app), ("example.js", example)):
+    assert "</script" not in text.lower() and "</style" not in text.lower(), f"{label} contains a closing tag"
+
+html = read(os.path.join(viewer, "index.html"))
+html = inline(html, '<link rel="stylesheet" href="style.css">', f"<style>\n{css}</style>")
+data = f"<script>window.ICONS={js(icons)};window.NAMES={js(names)};window.ICON_VERSION={js(version)};</script>\n"
+html = inline(html, '<script src="example.js"></script>', data + f"<script>\n{example}</script>")
+html = inline(html, '<script src="app.js"></script>', f"<script>\n{app}</script>")
 
 with open(out, "w", encoding="utf-8") as f:
     f.write(html)
-print(f"{len(icons)} icons embedded -> {out} ({os.path.getsize(out) / 1e6:.1f} MB)")
+print(f"{len(icons)} icons, {len(names)} names embedded -> {out} ({os.path.getsize(out) / 1e6:.1f} MB)")
