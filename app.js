@@ -1,5 +1,4 @@
-// Set this to your repository to enable the footer "problem?" link and GitHub icon.
-const REPO = 'https://github.com/OWNER/REPO';
+const REPO = 'https://github.com/Skillossus/rstools';
 
 const COLS = 8, MAX_SLOTS = 80; // official bank tag tab grid is 8x10
 const EQ_ROWS = [[null, 0, null], [1, 2, 13], [3, 4, 5], [null, 7, null], [9, 10, 12]];
@@ -307,13 +306,12 @@ $('again').onclick = () => { $('app').classList.add('hidden'); $('loader').class
 ['dragleave', 'drop'].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); $('drop').classList.remove('over'); }));
 document.addEventListener('drop', e => { if (e.dataTransfer) loadFiles(e.dataTransfer.files); });
 
-// Footer links stay hidden until REPO is set.
-if (!REPO.includes('OWNER')) {
-  $('problem').href = REPO + '/issues/new';
-  $('gh').href = REPO;
-  $('problem').classList.remove('hidden');
-  $('gh').classList.remove('hidden');
-}
+// Footer Links
+$('problem').href = REPO + '/issues/new';
+$('gh').href = REPO;
+$('problem').classList.remove('hidden');
+$('gh').classList.remove('hidden');
+
 // The icon pipeline writes icons/version.json; the release embeds it as window.ICON_VERSION.
 const showVer = v => { if (v && v.cache) $('ver').textContent = 'Icons from OSRS cache ' + v.cache + '.'; };
 if (window.ICON_VERSION) showVer(window.ICON_VERSION);
