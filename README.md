@@ -40,8 +40,6 @@ One detail: the hosted page loads item icons (and an item-name list) from the sa
 
 ## How to use it
 
-Short on time? [Watch the demo](docs/demo.mp4).
-
 1. In RuneLite, export your setups from Inventory Setups.
 2. Open the viewer on your tablet or phone and paste or drop the export.
 3. Open a setup, tap **Copy**, and paste it into the game's bank tag import.
