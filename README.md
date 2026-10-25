@@ -10,7 +10,7 @@ Paste or drop your export, tap <b>Copy</b>, paste into the game.</p>
 <p><b>Private</b>: everything runs in your browser. Nothing is uploaded.<br>
 <b>Free and open source.</b></p>
 
-<h3><a href="https://skillossus.github.io/rstools">Use it now</a> &nbsp;|&nbsp; <a href="docs/demo.mp4">Watch the demo</a> &nbsp;|&nbsp; <a href="https://github.com/Skillossus/rstools/issues">Report a problem</a> &nbsp;|&nbsp; <a href="https://github.com/Skillossus/rstools/releases">Download the offline version</a></h3>
+<h3><a href="https://skillossus.github.io/rstools">Use it now</a> &nbsp;|&nbsp; <a href="https://youtu.be/xYnjzy-O7v4?si=tkwmiFZgMFf6qWEe">Watch the demo (YouTube)</a> &nbsp;|&nbsp; <a href="https://github.com/Skillossus/rstools/issues">Report a problem</a> &nbsp;|&nbsp; <a href="https://github.com/Skillossus/rstools/releases">Download the offline version</a></h3>
 
 </div>
 
