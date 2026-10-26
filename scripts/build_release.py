@@ -39,6 +39,15 @@ def optional_json(name):
 
 names, version = optional_json("names.json"), optional_json("version.json")
 
+book_icons = {}
+book_dir = os.path.join(icon_dir, "spellbooks")
+if os.path.isdir(book_dir):
+    for name in os.listdir(book_dir):
+        stem, ext = os.path.splitext(name)
+        if ext == ".png":
+            with open(os.path.join(book_dir, name), "rb") as f:
+                book_icons[stem] = base64.b64encode(f.read()).decode()
+
 
 def js(obj):  # safe inside <script>
     return json.dumps(obj, separators=(",", ":")).replace("</", "<\\/")
@@ -50,10 +59,10 @@ for label, text in (("style.css", css), ("app.js", app), ("example.js", example)
 
 html = read(os.path.join(viewer, "index.html"))
 html = inline(html, '<link rel="stylesheet" href="style.css">', f"<style>\n{css}</style>")
-data = f"<script>window.ICONS={js(icons)};window.NAMES={js(names)};window.ICON_VERSION={js(version)};</script>\n"
+data = f"<script>window.ICONS={js(icons)};window.NAMES={js(names)};window.BOOK_ICONS={js(book_icons)};window.ICON_VERSION={js(version)};</script>\n"
 html = inline(html, '<script src="example.js"></script>', data + f"<script>\n{example}</script>")
 html = inline(html, '<script src="app.js"></script>', f"<script>\n{app}</script>")
 
 with open(out, "w", encoding="utf-8") as f:
     f.write(html)
-print(f"{len(icons)} icons, {len(names)} names embedded -> {out} ({os.path.getsize(out) / 1e6:.1f} MB)")
+print(f"{len(icons)} icons, {len(book_icons)} spellbook icons, {len(names)} names embedded -> {out} ({os.path.getsize(out) / 1e6:.1f} MB)")
