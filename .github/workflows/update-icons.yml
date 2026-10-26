@@ -82,6 +82,17 @@ jobs:
           ./gradlew run -PmainClass=com.runeprofile.itemicons.DumpItemNames \
             --args="${{ steps.check.outputs.cache_dir }} $GITHUB_WORKSPACE/build/names.json"
 
+      # The four spellbook side-icons (the same sprites Inventory Setups shows), from the same cache.
+      # Non-fatal as well: without them the viewer falls back to a plain book glyph.
+      - name: Dump spellbook icons
+        if: steps.check.outputs.new == 'true'
+        continue-on-error: true
+        working-directory: renderer/scripts/item-icons
+        run: |
+          cp "$GITHUB_WORKSPACE/tools/DumpSpellbookIcons.java" src/main/java/com/runeprofile/itemicons/
+          ./gradlew run -PmainClass=com.runeprofile.itemicons.DumpSpellbookIcons \
+            --args="${{ steps.check.outputs.cache_dir }} $GITHUB_WORKSPACE/build/spellbooks"
+
       # Refuse to replace good icons with a broken render (none, or far fewer than last time).
       - name: Verify render
         if: steps.check.outputs.new == 'true'
@@ -92,6 +103,9 @@ jobs:
         run: |
           mkdir -p icons
           cp -a build/icons/. icons/
+          if [ "$(ls build/spellbooks/*.png 2>/dev/null | wc -l)" = "4" ]; then
+            mkdir -p icons/spellbooks && cp build/spellbooks/*.png icons/spellbooks/
+          else echo "::warning::Spellbook icons were not produced; the viewer will use a plain book glyph."; fi
           if [ -s build/names.json ]; then cp build/names.json icons/names.json
           else echo "::warning::No item names were produced; hover text will show item ids."; fi
           python3 scripts/check_cache.py record \
