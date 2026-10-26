@@ -1,13 +1,15 @@
 const REPO = 'https://github.com/Skillossus/rstools';
 
 const COLS = 8, MAX_SLOTS = 80; // official bank tag tab grid is 8x10
-const EQ_ROWS = [[null, 0, null], [1, 2, 13], [3, 4, 5], [null, 7, null], [9, 10, 12]];
+// 'qv' = the quiver's ammunition, which the game draws top-right, beside the head slot.
+const EQ_ROWS = [[null, 0, 'qv'], [1, 2, 13], [3, 4, 5], [null, 7, null], [9, 10, 12]];
 // Inventory Setups numbers spellbooks 0-4 and leaves "sb" out of the export when it is 0 (Standard); 4 = none.
-const SPELLBOOKS = {
-  0: {name: 'Standard', color: '#9aa0a8'},
-  1: {name: 'Ancient', color: '#e0453f'},
-  2: {name: 'Lunar', color: '#3d9bff'},
-  3: {name: 'Arceuus', color: '#a35cff'}
+// `key` names the icon rendered from the game cache: icons/spellbooks/<key>.png
+const BOOKS = {
+  0: {key: 'standard', name: 'Standard', color: '#9aa0a8'},
+  1: {key: 'ancient', name: 'Ancient', color: '#e0453f'},
+  2: {key: 'lunar', name: 'Lunar', color: '#3d9bff'},
+  3: {key: 'arceuus', name: 'Arceuus', color: '#a35cff'}
 };
 const BOOK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 4h7a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H3zM21 4h-7a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h7z"/></svg>';
 const $ = id => document.getElementById(id);
@@ -142,6 +144,16 @@ function slot(it, prefix){
   }
   return d;
 }
+// The equipment screen shows the quiver's ammunition in its own slot; extra ammo types go in the label.
+function quiverSlot(qv){
+  const d = slot(qv[0], 'Quiver');
+  if (qv.length > 1) {
+    const all = ['Quiver: ' + qv.map(it => nameOf(it.id) + (it.q > 1 ? ' \u00d7 ' + it.q.toLocaleString() : '')).join('; ')][0];
+    d.title = all; d.dataset.label = all;
+    d.append(el('span', 'more', '+' + (qv.length - 1)));
+  }
+  return d;
+}
 function strip(items){
   const s = el('div', 'strip');
   items.filter(Boolean).forEach(it => s.append(slot(it)));
@@ -167,14 +179,29 @@ async function copyText(text, btn, label){
   btn.textContent = 'Copied';
   setTimeout(() => btn.textContent = label, 1200);
 }
+// Game-cache sprite when available; the inline book (static markup) only if the image cannot load.
+function bookFallback(){
+  const f = el('span', 'book');
+  f.innerHTML = BOOK_SVG;
+  return f;
+}
+function bookIcon(book){
+  const embedded = window.BOOK_ICONS;
+  const src = embedded ? (embedded[book.key] ? 'data:image/png;base64,' + embedded[book.key] : null)
+    : 'icons/spellbooks/' + book.key + '.png';
+  if (!src) return bookFallback();
+  const img = new Image();
+  img.alt = ''; img.className = 'book'; img.src = src;
+  img.onerror = () => img.replaceWith(bookFallback());
+  return img;
+}
 function spellbookBadge(sb){
-  const book = SPELLBOOKS[sb];
+  const book = BOOKS[sb];
   if (!book) return null;
   const b = el('span', 'sb');
   b.style.color = book.color;
   b.title = book.name + ' spellbook';
-  b.innerHTML = BOOK_SVG; // static markup only
-  b.append(book.name);
+  b.append(bookIcon(book), book.name);
   return b;
 }
 function render(body, s){
@@ -197,11 +224,11 @@ function render(body, s){
 
     const eq = el('div'); eq.append(el('h3', null, 'Equipment'));
     const eg = el('div', 'grid eq');
-    EQ_ROWS.forEach(r => r.forEach(idx => eg.append(idx === null ? el('div', 'slot spacer') : slot(s.eq[idx]))));
-    // Quiver contents sit in the equipment panel instead of a separate section.
     const qv = s.qv.filter(Boolean);
-    qv.forEach(it => eg.append(slot(it, 'Quiver')));
-    for (let pad = (3 - (qv.length % 3)) % 3; pad > 0; pad--) eg.append(el('div', 'slot spacer'));
+    EQ_ROWS.forEach(r => r.forEach(idx => {
+      if (idx === null || (idx === 'qv' && !qv.length)) eg.append(el('div', 'slot spacer'));
+      else eg.append(idx === 'qv' ? quiverSlot(qv) : slot(s.eq[idx]));
+    }));
     eq.append(eg);
     row.append(inv, eq);
     body.append(row);
@@ -306,12 +333,11 @@ $('again').onclick = () => { $('app').classList.add('hidden'); $('loader').class
 ['dragleave', 'drop'].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); $('drop').classList.remove('over'); }));
 document.addEventListener('drop', e => { if (e.dataTransfer) loadFiles(e.dataTransfer.files); });
 
-// Footer Links
+// Footer links (index.html ships them hidden so nothing flashes before the script runs).
 $('problem').href = REPO + '/issues/new';
 $('gh').href = REPO;
 $('problem').classList.remove('hidden');
 $('gh').classList.remove('hidden');
-
 // The icon pipeline writes icons/version.json; the release embeds it as window.ICON_VERSION.
 const showVer = v => { if (v && v.cache) $('ver').textContent = 'Icons from OSRS cache ' + v.cache + '.'; };
 if (window.ICON_VERSION) showVer(window.ICON_VERSION);
